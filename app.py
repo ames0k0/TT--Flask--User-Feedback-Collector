@@ -1,19 +1,18 @@
 import sqlite3
 import datetime
+from enum import Enum
+from operator import getitem
+from collections import defaultdict
 
 from flask import Flask
+from flask import Blueprint
 from flask import Response
-from flask import abort
 from flask import request
 from flask import redirect
 from flask import url_for
+from flask import jsonify
+from flask import abort
 from flask import g
-
-from src.sentiment_analysis import SentimentTypeEnum
-from src.sentiment_analysis import SentimentAnalysis
-
-
-app = Flask(__name__)
 
 
 def db_connection() -> sqlite3.Connection:
@@ -31,11 +30,23 @@ def get_db():
     return conn
 
 
-MISSING_PAYLOAD_EXCEPTION = Response(
+class SentimentTypeEnum(Enum):
+    neutral = "neutral"
+    negative = "negative"
+    positive = "positive"
+
+
+SENTIMENT_DATA: dict[str, SentimentTypeEnum] = {
+    "хорош": SentimentTypeEnum.positive,
+    "люблю": SentimentTypeEnum.positive,
+    "плохо": SentimentTypeEnum.negative,
+    "ненавиж": SentimentTypeEnum.negative,
+}
+MISSING_PAYLOAD_EXCEPTION: Response = Response(
     response='Необходимо передать json: `{ "text": "ваш отзыв" }`',
     status=400,
 )
-WRONG_SENTIMENT_EXCEPTION = Response(
+WRONG_SENTIMENT_EXCEPTION: Response = Response(
     response="Неалидный `sentiment`: "
     + " | ".join(
         SentimentTypeEnum.__members__,
@@ -44,13 +55,23 @@ WRONG_SENTIMENT_EXCEPTION = Response(
 )
 
 
+app = Flask(__name__)
+
+
 @app.errorhandler(404)
 def page_not_found(_):
-    return redirect(url_for("reviews"))
+    return redirect(url_for("reviews.index"))
 
 
-@app.route("/reviews", methods=["GET", "POST"])
-def reviews() -> list[dict] | dict:
+reviews = Blueprint(
+    name="reviews",
+    import_name="reviews",
+    url_prefix="/reviews",
+)
+
+
+@reviews.route("", methods=["GET", "POST"])
+def index() -> list[dict] | dict:
     conn: sqlite3.Connection = get_db()
     curr: sqlite3.Cursor = conn.cursor()
 
@@ -72,19 +93,37 @@ def reviews() -> list[dict] | dict:
         )
         RETURNING *;
         """
-        sentiment = SentimentAnalysis().analyze(text=text)
+        sentiment_score: dict[SentimentTypeEnum, int] = defaultdict(int)
+        text_sentiment: SentimentTypeEnum = SentimentTypeEnum.neutral
 
-        created_at = datetime.datetime.now(
+        for word in text.strip().split():
+            # XXX: Case-insensitive
+            word = word.lower()
+
+            for key, value in SENTIMENT_DATA.items():
+                if key not in word:
+                    continue
+                sentiment_score[value] += 1
+
+        found_sentiments: list[SentimentTypeEnum] = sorted(
+            sentiment_score,
+            key=lambda item: getitem(item, 1),  # type: ignore
+        )
+        if found_sentiments:
+            # NOTE: No comparison
+            # positive=2, negative=2 -> positive | negative
+            text_sentiment = getitem(found_sentiments, 0)
+
+        created_at: str = datetime.datetime.now(
             tz=datetime.timezone.utc,
         ).isoformat()
 
-        curr.execute(sql, (text, sentiment, created_at))
+        curr.execute(sql, (text, text_sentiment.value, created_at))
         result = curr.fetchone()
         conn.commit()
 
         return dict(result)
 
-    # XXX: No `order`
     sql: str = "SELECT * FROM reviews"
     parameters: list[str] = []
 
@@ -93,12 +132,13 @@ def reviews() -> list[dict] | dict:
         # XXX: Case-insensitive
         sentiment = sentiment.lower()
 
-        # XXX: Won't raise any ValidationErrors'
-        if sentiment not in SentimentTypeEnum.fields():
+        if sentiment not in SentimentTypeEnum.__members__:
             abort(WRONG_SENTIMENT_EXCEPTION)
 
         parameters.append(sentiment)
         sql += " WHERE sentiment=?"
+
+    sql += " ORDER BY created_at DESC"
 
     curr.execute(sql, parameters)
 
@@ -120,8 +160,10 @@ if __name__ == "__main__":
     )
     conn.commit()
 
+    app.register_blueprint(reviews)
+
     try:
-        app.run(debug=True)
+        app.run()
     except KeyboardInterrupt:
         pass
     finally:

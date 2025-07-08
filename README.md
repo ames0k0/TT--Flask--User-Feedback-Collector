@@ -15,8 +15,8 @@ git clone \
 cd TT--Flask--User-Feedback-Collector
 
 # Создания и Активации виртуальной окружении
-python -m venv venv
-source venv/bin/activate
+python -m venv env
+source env/bin/activate
 
 # Установка зависимости и Запуск проекта
 pip install flask==3.1.1
