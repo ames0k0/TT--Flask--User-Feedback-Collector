@@ -1,6 +1,7 @@
 import sqlite3
 import datetime
 from enum import Enum
+from typing import Any
 from operator import getitem
 from collections import defaultdict
 
@@ -10,24 +11,8 @@ from flask import Response
 from flask import request
 from flask import redirect
 from flask import url_for
-from flask import jsonify
 from flask import abort
 from flask import g
-
-
-def db_connection() -> sqlite3.Connection:
-    return sqlite3.connect("reviews.db")
-
-
-def get_db():
-    conn = getattr(g, "_database", None)
-
-    if conn is None:
-        conn = db_connection()
-        conn.row_factory = sqlite3.Row
-        g._database = conn
-
-    return conn
 
 
 class SentimentTypeEnum(Enum):
@@ -55,6 +40,21 @@ WRONG_SENTIMENT_EXCEPTION: Response = Response(
 )
 
 
+def db_connection() -> sqlite3.Connection:
+    return sqlite3.connect("reviews.db")
+
+
+def get_db():
+    conn = getattr(g, "_database", None)
+
+    if conn is None:
+        conn = db_connection()
+        conn.row_factory = sqlite3.Row
+        g._database = conn
+
+    return conn
+
+
 app = Flask(__name__)
 
 
@@ -80,9 +80,11 @@ def index() -> list[dict] | dict:
             abort(MISSING_PAYLOAD_EXCEPTION)
 
         data: dict = request.get_json()
-        text: str | None = data.get("text")
+        text: Any | None = data.get("text")
         if text is None:
             abort(MISSING_PAYLOAD_EXCEPTION)
+
+        text = str(text)
 
         sql = """
         INSERT INTO reviews (
