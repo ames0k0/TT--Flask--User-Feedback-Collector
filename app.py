@@ -81,7 +81,8 @@ def index() -> list[dict] | dict:
 
         data: dict = request.get_json()
         text: Any | None = data.get("text")
-        if text is None:
+        # XXX: `Falsy` text
+        if not text:
             abort(MISSING_PAYLOAD_EXCEPTION)
 
         text = str(text)
