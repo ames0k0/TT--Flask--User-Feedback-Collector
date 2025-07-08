@@ -11,10 +11,12 @@ git clone \
 ```
 
 ### Запуск проекта
+> Версия `python`: Python 3.12.8
 ```bash
+# Переход в директорию проекта
 cd TT--Flask--User-Feedback-Collector
 
-# Создания и Активации виртуальной окружении
+# Создание и Активации виртуальной окружений
 python -m venv env
 source env/bin/activate
 
@@ -32,7 +34,7 @@ python app.py
   | *               | JSON  | Отзыв     | { "text": "ваш отзыв" }   |
 
   ```bash
-    curl -X 'POST' \
+  curl -X 'POST' \
     -H 'Content-type: application/json' \
     -d '{ "text": "ваш отзыв" }' \
     'http://127.0.0.1:5000/reviews'
@@ -41,7 +43,7 @@ python app.py
   ```json
   {
     "id":3,
-    "text":"Hello, World!",
+    "text":"ваш отзыв",
     "created_at":"2025-07-08T16:06:20.003726+00:00",
     "sentiment":"neutral"
   }
